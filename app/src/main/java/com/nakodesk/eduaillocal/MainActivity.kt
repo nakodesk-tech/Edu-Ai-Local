@@ -41,6 +41,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
@@ -65,7 +66,7 @@ private val catalog = listOf(
         "https://huggingface.co/hugging-quants/Llama-3.2-3B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-3b-instruct-q4_k_m.gguf?download=true"),
     CatalogModel("Gemma 3 1B Instruct", "gemma-3-1b-it-Q4_K_M.gguf", "Q4_K_M", "806 MB",
         "Small and lightweight model",
-        "https://huggingface.co/unsloth/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf?download=true"),
+        "https://huggingface.co/ggml-org/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf?download=true"),
     CatalogModel("Qwen 3 4B", "Qwen3-4B-Q4_K_M.gguf", "Q4_K_M", "2.50 GB",
         "Multilingual general-purpose model",
         "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf?download=true")
@@ -192,21 +193,31 @@ private fun EduAiLocalApp() {
         scope.launch {
             try {
                 loadingModel = true
+                status = "Checking " + file.name + "…"
+
+                val validationError = withContext(Dispatchers.IO) { validateGgufFile(file) }
+                if (validationError != null) throw IllegalArgumentException(validationError)
+
+                // Unload only when a model was actually loaded. Never clean up an
+                // uninitialized native engine before its first model load.
+                if (selectedFile != null) {
+                    selectedFile = null
+                    withContext(Dispatchers.Default) { localEngine.cleanUp() }
+                }
+
                 status = "Loading " + file.name + "…"
                 withContext(Dispatchers.Default) {
-                    // AiChat starts with no loaded native model. Do not call cleanUp()
-                    // before the first load; the native binding's unload path expects
-                    // model/context resources to already exist.
-                    if (selectedFile != null) {
-                        localEngine.cleanUp()
-                    }
                     localEngine.loadModel(file.absolutePath)
                 }
+
                 selectedFile = file
                 status = "Model ready — offline"
             } catch (e: Exception) {
+                selectedFile = null
                 status = "Model load failed"
-                errorMessage = e.message ?: "Could not load model."
+                val nativeState = try { localEngine.state.value.toString() } catch (_: Exception) { "unknown" }
+                val detail = e.message?.takeIf { it.isNotBlank() } ?: e::class.java.simpleName
+                errorMessage = "Cannot load model.\\n$detail\\nEngine state: $nativeState"
             } finally {
                 loadingModel = false
             }
@@ -236,8 +247,10 @@ private fun EduAiLocalApp() {
                 localEngine.sendUserPrompt(prompt).collect { token ->
                     result.append(token)
                     withContext(Dispatchers.Main) {
-                        val latest = currentSession.messages
-                        updateCurrentMessages(latest.dropLast(1) + ChatMessage("assistant", result.toString()))
+                        val latest = sessions.firstOrNull { it.id == currentChatId }?.messages ?: emptyList()
+                        if (latest.isNotEmpty()) {
+                            updateCurrentMessages(latest.dropLast(1) + ChatMessage("assistant", result.toString()))
+                        }
                     }
                 }
                 withContext(Dispatchers.Main) {
@@ -247,8 +260,10 @@ private fun EduAiLocalApp() {
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    val latest = currentSession.messages
-                    updateCurrentMessages(latest.dropLast(1) + ChatMessage("assistant", "Error: " + (e.message ?: "Generation failed.")))
+                    val latest = sessions.firstOrNull { it.id == currentChatId }?.messages ?: emptyList()
+                    if (latest.isNotEmpty()) {
+                        updateCurrentMessages(latest.dropLast(1) + ChatMessage("assistant", "Error: " + (e.message ?: "Generation failed.")))
+                    }
                     status = "Generation failed"
                     generating = false
                 }
@@ -909,6 +924,35 @@ private fun Context.displayName(uri: Uri): String? {
         if (cursor?.moveToFirst() == true) cursor.getString(0) else null
     } finally {
         cursor?.close()
+    }
+}
+
+private fun validateGgufFile(file: File): String? {
+    if (!file.exists()) return "Model file does not exist."
+    if (!file.isFile) return "Selected model path is not a file."
+    if (file.length() < 8L) return "Model file is incomplete or empty."
+
+    return try {
+        FileInputStream(file).use { input ->
+            val header = ByteArray(8)
+            var offset = 0
+            while (offset < header.size) {
+                val read = input.read(header, offset, header.size - offset)
+                if (read < 0) break
+                offset += read
+            }
+            if (offset < 8) return "Model file is incomplete."
+            val magic = String(header, 0, 4, Charsets.US_ASCII)
+            if (magic != "GGUF") return "Invalid GGUF file: missing GGUF header."
+            val version = (header[4].toInt() and 0xFF) or
+                ((header[5].toInt() and 0xFF) shl 8) or
+                ((header[6].toInt() and 0xFF) shl 16) or
+                ((header[7].toInt() and 0xFF) shl 24)
+            if (version !in 2..3) return "Unsupported GGUF version: $version."
+            null
+        }
+    } catch (e: Exception) {
+        "Could not read model file: " + (e.message ?: "I/O error")
     }
 }
 

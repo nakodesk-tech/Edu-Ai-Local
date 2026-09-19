@@ -698,7 +698,7 @@ private fun HomeScreen(
                 Spacer(Modifier.height(18.dp))
                 Text("नमस्कार! 👋", fontSize = 30.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(6.dp))
-                Text("आज मी तुम्हाला कशात मदत करू?", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("आज मी तुम्हाला काय मदत करू?", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(8.dp))
                 Text("Edu AI Local — तुमचा offline AI assistant", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -709,7 +709,7 @@ private fun HomeScreen(
                 value = homePrompt,
                 onValueChange = onHomePrompt,
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("काहीही विचारा…") },
+                placeholder = { Text("तुमचा प्रश्न येथे विचारा…") },
                 shape = RoundedCornerShape(28.dp),
                 minLines = 2,
                 maxLines = 4,
@@ -722,20 +722,20 @@ private fun HomeScreen(
             )
             if (selectedFile == null) {
                 Spacer(Modifier.height(6.dp))
-                Text("चॅट सुरू करण्यासाठी आधी Models मधून local model निवडा.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("चॅट सुरू करण्यासाठी आधी Models मधून local model लोड करा.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(CenterArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 HomeActionCard("New Chat", "नवीन संभाषण", Icons.Default.AddComment, Modifier.weight(1f), onStart)
-                HomeActionCard("Chats", "इतिहास", Icons.Default.History, Modifier.weight(1f), onHistory)
+                HomeActionCard("Chats", "Chat History", Icons.Default.History, Modifier.weight(1f), onHistory)
             }
         }
 
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                HomeActionCard("Models", selectedFile?.name ?: "Select model", Icons.Default.Memory, Modifier.weight(1f), onModels)
+            Row(CenterArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                HomeActionCard("Models", selectedFile?.name ?: "Model निवडा", Icons.Default.Memory, Modifier.weight(1f), onModels)
                 HomeActionCard("Settings", "App preferences", Icons.Default.Settings, Modifier.weight(1f), onSettings)
             }
         }

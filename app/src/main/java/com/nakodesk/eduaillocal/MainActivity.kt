@@ -35,7 +35,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arm.aichat.AiChat
 import com.arm.aichat.InferenceEngine
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -62,13 +64,13 @@ private data class CatalogModel(
 
 private val catalog = listOf(
     CatalogModel("Llama 3.2 3B Instruct", "llama-3.2-3b-instruct-q4_k_m.gguf", "Q4_K_M", "2.02 GB",
-        "General purpose instruct model",
+        "Better quality • General purpose instruct model",
         "https://huggingface.co/hugging-quants/Llama-3.2-3B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-3b-instruct-q4_k_m.gguf?download=true"),
     CatalogModel("Gemma 3 1B Instruct", "gemma-3-1b-it-Q4_K_M.gguf", "Q4_K_M", "806 MB",
-        "Small and lightweight model",
+        "Fast / Basic • Small and lightweight model",
         "https://huggingface.co/ggml-org/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf?download=true"),
     CatalogModel("Qwen 3 4B", "Qwen3-4B-Q4_K_M.gguf", "Q4_K_M", "2.50 GB",
-        "Multilingual general-purpose model",
+        "Advanced / Multilingual • General-purpose model",
         "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf?download=true")
 )
 
@@ -100,7 +102,7 @@ private fun EduAiLocalApp() {
     val scope = rememberCoroutineScope()
 
     var engine by remember { mutableStateOf<InferenceEngine?>(null) }
-    var screen by rememberSaveable { mutableStateOf("chat") }
+    var screen by rememberSaveable { mutableStateOf("home") }
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
     var darkTheme by rememberSaveable { mutableStateOf(false) }
     var installedModels by remember { mutableStateOf(emptyList<File>()) }
@@ -117,6 +119,11 @@ private fun EduAiLocalApp() {
     var renameDialog by remember { mutableStateOf(false) }
     var attachedFileName by rememberSaveable { mutableStateOf<String?>(null) }
     var attachedFileText by rememberSaveable { mutableStateOf<String?>(null) }
+    var homePrompt by rememberSaveable { mutableStateOf("") }
+    var generationJob by remember { mutableStateOf<Job?>(null) }
+    var deleteChatId by remember { mutableStateOf<String?>(null) }
+    var deleteModelFile by remember { mutableStateOf<File?>(null) }
+    var closeDialog by remember { mutableStateOf(false) }
 
     if (sessions.isEmpty()) sessions = listOf(newSession())
     if (currentChatId == null) currentChatId = sessions.firstOrNull()?.id
@@ -150,8 +157,16 @@ private fun EduAiLocalApp() {
         input = ""
         attachedFileName = null
         attachedFileText = null
+        homePrompt = ""
         drawerOpen = false
         saveAll()
+    }
+
+    fun stopGeneration() {
+        generationJob?.cancel()
+        generationJob = null
+        generating = false
+        status = if (selectedFile != null) "Model ready — offline" else "Ready"
     }
 
     fun openChat(id: String) {
@@ -233,18 +248,39 @@ private fun EduAiLocalApp() {
             raw + "\n\n[Attached file: " + (attachedFileName ?: "file") + "]\n" + attachedFileText
         } else raw
 
+        val recentContext = currentSession.messages
+            .filter { it.text.isNotBlank() }
+            .takeLast(8)
+            .joinToString("\n") { message ->
+                (if (message.role == "user") "User: " else "Assistant: ") + message.text.take(2500)
+            }
+
+        val modelPrompt = """
+            You are Edu AI Local, a helpful Marathi-first assistant.
+            Answer the user's request directly and concisely.
+            If the user writes in Marathi, reply in Marathi.
+            Do not invent facts or claim to have created a file unless the app actually created it.
+            Follow the requested format.
+
+            Recent conversation:
+            $recentContext
+
+            Current user request:
+            $prompt
+        """.trimIndent()
+
         input = ""
         attachedFileName = null
         attachedFileText = null
         val next = currentSession.messages + ChatMessage("user", raw) + ChatMessage("assistant", "")
         updateCurrentMessages(next)
         generating = true
-        status = "Generating locally…"
+        status = "Thinking…"
 
-        scope.launch(Dispatchers.Default) {
+        generationJob = scope.launch(Dispatchers.Default) {
             try {
                 val result = StringBuilder()
-                localEngine.sendUserPrompt(prompt).collect { token ->
+                localEngine.sendUserPrompt(modelPrompt).collect { token ->
                     result.append(token)
                     withContext(Dispatchers.Main) {
                         val latest = sessions.firstOrNull { it.id == currentChatId }?.messages ?: emptyList()
@@ -256,6 +292,14 @@ private fun EduAiLocalApp() {
                 withContext(Dispatchers.Main) {
                     status = "Model ready — offline"
                     generating = false
+                    generationJob = null
+                    saveAll()
+                }
+            } catch (_: CancellationException) {
+                withContext(Dispatchers.Main) {
+                    generating = false
+                    generationJob = null
+                    status = if (selectedFile != null) "Model ready — offline" else "Ready"
                     saveAll()
                 }
             } catch (e: Exception) {
@@ -266,6 +310,7 @@ private fun EduAiLocalApp() {
                     }
                     status = "Generation failed"
                     generating = false
+                    generationJob = null
                 }
             }
         }
@@ -376,8 +421,13 @@ private fun EduAiLocalApp() {
     }
 
     val drawerState = rememberDrawerState(DrawerValue.Closed)
-    BackHandler(enabled = drawerOpen || screen != "chat") {
-        if (drawerOpen) drawerOpen = false else screen = "chat"
+    BackHandler {
+        when {
+            drawerOpen -> drawerOpen = false
+            screen != "home" -> screen = "home"
+            generating -> stopGeneration()
+            else -> closeDialog = true
+        }
     }
     LaunchedEffect(drawerOpen) {
         if (drawerOpen) drawerState.open() else drawerState.close()
@@ -399,6 +449,7 @@ private fun EduAiLocalApp() {
                         Text("Edu AI Local", fontSize = 21.sp, fontWeight = FontWeight.Bold)
                     }
                     Spacer(Modifier.height(22.dp))
+                    DrawerItem("Home", Icons.Default.Home, screen == "home") { screen = "home"; drawerOpen = false }
                     DrawerItem("New Chat", Icons.Default.AddComment, false, ::startNewChat)
                     DrawerItem("Chats", Icons.Default.Chat, screen == "history") { screen = "history"; drawerOpen = false }
                     DrawerItem("Models", Icons.Default.Memory, screen == "models") { screen = "models"; drawerOpen = false }
@@ -439,6 +490,7 @@ private fun EduAiLocalApp() {
                                 }
                             } else {
                                 Text(when (screen) {
+                                    "home" -> "Edu AI Local"
                                     "models" -> "Models"
                                     "history" -> "Chats"
                                     "settings" -> "Settings"
@@ -457,18 +509,29 @@ private fun EduAiLocalApp() {
                 }
             ) { padding ->
                 when (screen) {
+                    "home" -> HomeScreen(
+                        Modifier.padding(padding),
+                        selectedFile,
+                        sessions,
+                        homePrompt,
+                        { homePrompt = it },
+                        { startNewChat(); input = homePrompt; homePrompt = "" },
+                        { screen = "history" },
+                        { screen = "models" },
+                        { screen = "settings" }
+                    )
                     "chat" -> ChatScreen(
                         Modifier.padding(padding), selectedFile, installedModels, input, attachedFileName,
                         { input = it }, { attachedFileName = null; attachedFileText = null },
                         currentSession.messages, generating, loadingModel, status,
                         { loadModel(it) }, { chatFilePicker.launch(arrayOf("text/plain", "text/markdown", "text/csv", "application/json", "text/*")) },
-                        { sendMessage() }, { copyText(context, it) }
+                        { sendMessage() }, { stopGeneration() }, { copyText(context, it) }
                     )
                     "models" -> ModelsScreen(
                         Modifier.padding(padding), installedModels, selectedFile, downloadName, downloadProgress,
                         { modelPicker.launch(arrayOf("application/octet-stream", "application/x-gguf", "*/*")) },
                         { downloadModel(it) }, { loadModel(it) },
-                        { file -> file.delete(); refreshModels(); if (selectedFile?.path == file.path) { selectedFile = null; status = "Model removed" } }
+                        { file -> deleteModelFile = file }
                     )
                     "history" -> ChatHistoryScreen(
                         Modifier.padding(padding), sessions, currentChatId,
@@ -477,12 +540,7 @@ private fun EduAiLocalApp() {
                             sessions = sessions.map { if (it.id == id) it.copy(title = title) else it }
                             saveAll()
                         },
-                        { id ->
-                            sessions = sessions.filterNot { it.id == id }
-                            if (sessions.isEmpty()) sessions = listOf(newSession())
-                            if (currentChatId == id) currentChatId = sessions.first().id
-                            saveAll()
-                        }
+                        { id -> deleteChatId = id }
                     )
                     else -> SettingsScreen(Modifier.padding(padding), darkTheme, { darkTheme = it }, selectedFile)
                 }
@@ -499,6 +557,59 @@ private fun EduAiLocalApp() {
                         renameDialog = false
                     },
                     { renameDialog = false }
+                )
+            }
+
+            deleteChatId?.let { id ->
+                AlertDialog(
+                    onDismissRequest = { deleteChatId = null },
+                    title = { Text("Delete chat?") },
+                    text = { Text("This conversation will be permanently removed from this device.") },
+                    confirmButton = {
+                        TextButton({
+                            sessions = sessions.filterNot { it.id == id }
+                            if (sessions.isEmpty()) sessions = listOf(newSession())
+                            if (currentChatId == id) currentChatId = sessions.first().id
+                            deleteChatId = null
+                            saveAll()
+                        }) { Text("Delete") }
+                    },
+                    dismissButton = { TextButton({ deleteChatId = null }) { Text("Cancel") } }
+                )
+            }
+
+            deleteModelFile?.let { file ->
+                AlertDialog(
+                    onDismissRequest = { deleteModelFile = null },
+                    title = { Text("Delete model?") },
+                    text = { Text("Delete " + file.name + " from this device? The model will need to be downloaded or imported again.") },
+                    confirmButton = {
+                        TextButton({
+                            file.delete()
+                            refreshModels()
+                            if (selectedFile?.path == file.path) {
+                                selectedFile = null
+                                status = "Model removed"
+                            }
+                            deleteModelFile = null
+                        }) { Text("Delete") }
+                    },
+                    dismissButton = { TextButton({ deleteModelFile = null }) { Text("Cancel") } }
+                )
+            }
+
+            if (closeDialog) {
+                AlertDialog(
+                    onDismissRequest = { closeDialog = false },
+                    title = { Text("Close Edu AI Local?") },
+                    text = { Text("You are on the Home screen. Do you want to exit the app?") },
+                    confirmButton = {
+                        TextButton({
+                            closeDialog = false
+                            (context as? ComponentActivity)?.finish()
+                        }) { Text("Exit") }
+                    },
+                    dismissButton = { TextButton({ closeDialog = false }) { Text("Stay") } }
                 )
             }
 
@@ -525,6 +636,146 @@ private fun DrawerItem(label: String, icon: androidx.compose.ui.graphics.vector.
     )
 }
 
+
+@Composable
+private fun HomeScreen(
+    modifier: Modifier,
+    selectedFile: File?,
+    sessions: List<ChatSession>,
+    homePrompt: String,
+    onHomePrompt: (String) -> Unit,
+    onStart: () -> Unit,
+    onHistory: () -> Unit,
+    onModels: () -> Unit,
+    onSettings: () -> Unit
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Spacer(Modifier.height(18.dp))
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Surface(
+                    modifier = Modifier.size(64.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Psychology, null, Modifier.size(34.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+                Spacer(Modifier.height(18.dp))
+                Text("नमस्कार! 👋", fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(6.dp))
+                Text("आज मी तुम्हाला कशात मदत करू?", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(8.dp))
+                Text("Edu AI Local — तुमचा offline AI assistant", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+
+        item {
+            OutlinedTextField(
+                value = homePrompt,
+                onValueChange = onHomePrompt,
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("काहीही विचारा…") },
+                shape = RoundedCornerShape(28.dp),
+                minLines = 2,
+                maxLines = 4,
+                trailingIcon = {
+                    IconButton(onClick = onStart, enabled = homePrompt.isNotBlank() && selectedFile != null) {
+                        Icon(Icons.Default.ArrowUpward, "Start chat")
+                    }
+                },
+                enabled = selectedFile != null
+            )
+            if (selectedFile == null) {
+                Spacer(Modifier.height(6.dp))
+                Text("चॅट सुरू करण्यासाठी आधी Models मधून local model निवडा.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                HomeActionCard("New Chat", "नवीन संभाषण", Icons.Default.AddComment, Modifier.weight(1f), onStart)
+                HomeActionCard("Chats", "इतिहास", Icons.Default.History, Modifier.weight(1f), onHistory)
+            }
+        }
+
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                HomeActionCard("Models", selectedFile?.name ?: "Select model", Icons.Default.Memory, Modifier.weight(1f), onModels)
+                HomeActionCard("Settings", "App preferences", Icons.Default.Settings, Modifier.weight(1f), onSettings)
+            }
+        }
+
+        if (sessions.any { it.messages.any { m -> m.role == "user" } }) {
+            item { Text("Recent chats", fontWeight = FontWeight.Bold, fontSize = 17.sp) }
+            items(sessions.take(3)) { session ->
+                if (session.messages.any { it.role == "user" }) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        onClick = onHistory
+                    ) {
+                        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.ChatBubbleOutline, null)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(session.title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    session.messages.lastOrNull { it.role == "user" }?.text ?: "",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(9.dp).background(if (selectedFile != null) Color(0xFF2FC66D) else Color.Gray, CircleShape))
+                    Spacer(Modifier.width(9.dp))
+                    Column {
+                        Text(if (selectedFile != null) "Offline model ready" else "No model loaded", fontWeight = FontWeight.SemiBold)
+                        Text(selectedFile?.name ?: "Open Models to import or download a GGUF model.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeActionCard(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
+    Card(modifier = modifier, shape = RoundedCornerShape(20.dp), onClick = onClick) {
+        Column(Modifier.padding(16.dp)) {
+            Icon(icon, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(10.dp))
+            Text(title, fontWeight = FontWeight.Bold)
+            Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
 @Composable
 private fun ChatScreen(
     modifier: Modifier,
@@ -541,9 +792,12 @@ private fun ChatScreen(
     onLoad: (File) -> Unit,
     onPickFile: () -> Unit,
     onSend: () -> Unit,
+    onStop: () -> Unit,
     onCopy: (String) -> Unit
 ) {
     val listState = rememberLazyListState()
+    val scrollScope = rememberCoroutineScope()
+
     LaunchedEffect(messages.size, messages.lastOrNull()?.text) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
@@ -592,39 +846,52 @@ private fun ChatScreen(
             Text(if (loadingModel) "Loading model…" else status, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            itemsIndexed(messages) { index, message ->
-                val user = message.role == "user"
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = if (user) Alignment.End else Alignment.Start) {
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = if (user) Color(0xFF1976F3) else MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.widthIn(max = 350.dp)
-                    ) {
-                        Column(Modifier.padding(14.dp)) {
-                            Text(
-                                message.text.ifBlank { if (generating && index == messages.lastIndex) "…" else "" },
-                                color = if (user) Color.White else MaterialTheme.colorScheme.onSurface,
-                                lineHeight = 21.sp
-                            )
-                            if (message.text.isNotBlank() && !(generating && index == messages.lastIndex)) {
-                                Spacer(Modifier.height(5.dp))
-                                TextButton(
-                                    onClick = { onCopy(message.text) },
-                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-                                ) {
-                                    Icon(Icons.Default.ContentCopy, null, Modifier.size(15.dp))
-                                    Spacer(Modifier.width(4.dp))
-                                    Text("Copy", fontSize = 12.sp)
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                itemsIndexed(messages) { index, message ->
+                    val user = message.role == "user"
+                    Column(Modifier.fillMaxWidth(), horizontalAlignment = if (user) Alignment.End else Alignment.Start) {
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (user) Color(0xFF1976F3) else MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.widthIn(max = 350.dp)
+                        ) {
+                            Column(Modifier.padding(14.dp)) {
+                                Text(
+                                    message.text.ifBlank { if (generating && index == messages.lastIndex) "Thinking…" else "" },
+                                    color = if (user) Color.White else MaterialTheme.colorScheme.onSurface,
+                                    lineHeight = 21.sp
+                                )
+                                if (message.text.isNotBlank() && !(generating && index == messages.lastIndex)) {
+                                    Spacer(Modifier.height(5.dp))
+                                    TextButton(
+                                        onClick = { onCopy(message.text) },
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                                    ) {
+                                        Icon(Icons.Default.ContentCopy, null, Modifier.size(15.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Copy", fontSize = 12.sp)
+                                    }
                                 }
                             }
                         }
                     }
+                }
+            }
+
+            if (listState.canScrollForward) {
+                SmallFloatingActionButton(
+                    onClick = { scrollScope.launch { listState.animateScrollToItem(messages.lastIndex) } },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 12.dp),
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(Icons.Default.KeyboardArrowDown, "Go to bottom")
                 }
             }
         }
@@ -652,19 +919,30 @@ private fun ChatScreen(
                 value = input,
                 onValueChange = onInput,
                 Modifier.weight(1f),
-                placeholder = { Text("Message your local model…") },
+                placeholder = { Text(if (generating) "Thinking…" else "Message your local model…") },
                 shape = RoundedCornerShape(22.dp),
                 maxLines = 5,
                 enabled = selectedFile != null && !generating && !loadingModel
             )
             Spacer(Modifier.width(6.dp))
-            FloatingActionButton(
-                onClick = onSend,
-                Modifier.size(52.dp),
-                containerColor = Color(0xFF1976F3),
-                contentColor = Color.White
-            ) {
-                Icon(Icons.Default.Send, "Send")
+            if (generating) {
+                FloatingActionButton(
+                    onClick = onStop,
+                    modifier = Modifier.size(52.dp),
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                ) {
+                    Icon(Icons.Default.Stop, "Stop thinking")
+                }
+            } else {
+                FloatingActionButton(
+                    onClick = onSend,
+                    modifier = Modifier.size(52.dp),
+                    containerColor = Color(0xFF1976F3),
+                    contentColor = Color.White
+                ) {
+                    Icon(Icons.Default.Send, "Send")
+                }
             }
         }
     }

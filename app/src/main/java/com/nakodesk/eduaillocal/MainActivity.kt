@@ -194,7 +194,12 @@ private fun EduAiLocalApp() {
                 loadingModel = true
                 status = "Loading " + file.name + "…"
                 withContext(Dispatchers.Default) {
-                    localEngine.cleanUp()
+                    // AiChat starts with no loaded native model. Do not call cleanUp()
+                    // before the first load; the native binding's unload path expects
+                    // model/context resources to already exist.
+                    if (selectedFile != null) {
+                        localEngine.cleanUp()
+                    }
                     localEngine.loadModel(file.absolutePath)
                 }
                 selectedFile = file

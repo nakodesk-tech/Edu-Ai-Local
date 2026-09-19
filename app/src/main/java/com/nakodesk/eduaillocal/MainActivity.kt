@@ -52,6 +52,8 @@ import java.util.UUID
 private const val MODEL_DIR = "models"
 private const val CHAT_PREFS = "edu_ai_local_chats"
 private const val CHAT_JSON = "sessions"
+private const val MODEL_PREFS = "edu_ai_local_model"
+private const val MODEL_FILE = "loaded_model_file"
 
 private data class CatalogModel(
     val name: String,
@@ -192,7 +194,26 @@ private fun EduAiLocalApp() {
             engine = withContext(Dispatchers.Default) {
                 AiChat.getInferenceEngine(context.applicationContext)
             }
-            status = "Ready — choose a local model"
+
+            val savedModelName = context.getSharedPreferences(MODEL_PREFS, Context.MODE_PRIVATE)
+                .getString(MODEL_FILE, null)
+
+            val savedModel = savedModelName?.let { name ->
+                File(File(context.filesDir, MODEL_DIR), name).takeIf { it.isFile }
+            }
+
+            if (savedModel != null) {
+                status = "Restoring " + savedModel.name + "…"
+                loadModel(savedModel)
+            } else {
+                if (savedModelName != null) {
+                    context.getSharedPreferences(MODEL_PREFS, Context.MODE_PRIVATE)
+                        .edit()
+                        .remove(MODEL_FILE)
+                        .apply()
+                }
+                status = "Ready — choose a local model"
+            }
         } catch (e: Exception) {
             status = "Inference engine unavailable"
             errorMessage = e.message ?: "Could not initialize local inference."
@@ -226,6 +247,10 @@ private fun EduAiLocalApp() {
                 }
 
                 selectedFile = file
+                context.getSharedPreferences(MODEL_PREFS, Context.MODE_PRIVATE)
+                    .edit()
+                    .putString(MODEL_FILE, file.name)
+                    .apply()
                 status = "Model ready — offline"
             } catch (e: Exception) {
                 selectedFile = null
@@ -589,6 +614,10 @@ private fun EduAiLocalApp() {
                             refreshModels()
                             if (selectedFile?.path == file.path) {
                                 selectedFile = null
+                                context.getSharedPreferences(MODEL_PREFS, Context.MODE_PRIVATE)
+                                    .edit()
+                                    .remove(MODEL_FILE)
+                                    .apply()
                                 status = "Model removed"
                             }
                             deleteModelFile = null

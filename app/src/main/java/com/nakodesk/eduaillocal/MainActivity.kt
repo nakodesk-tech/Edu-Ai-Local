@@ -515,7 +515,7 @@ private fun EduAiLocalApp() {
                         sessions,
                         homePrompt,
                         { homePrompt = it },
-                        { startNewChat(); input = homePrompt; homePrompt = "" },
+                        { val prompt = homePrompt; startNewChat(); input = prompt; homePrompt = "" },
                         { screen = "history" },
                         { screen = "models" },
                         { screen = "settings" }

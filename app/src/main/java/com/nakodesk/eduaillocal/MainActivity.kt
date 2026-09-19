@@ -125,6 +125,7 @@ private fun EduAiLocalApp() {
     var generationJob by remember { mutableStateOf<Job?>(null) }
     var deleteChatId by remember { mutableStateOf<String?>(null) }
     var deleteModelFile by remember { mutableStateOf<File?>(null) }
+    var deleteMessageIndex by remember { mutableStateOf<Int?>(null) }
     var closeDialog by remember { mutableStateOf(false) }
 
     if (sessions.isEmpty()) sessions = listOf(newSession())
@@ -162,6 +163,12 @@ private fun EduAiLocalApp() {
         homePrompt = ""
         drawerOpen = false
         saveAll()
+    }
+
+    fun deleteCurrentMessage(index: Int) {
+        if (index !in currentSession.messages.indices) return
+        val updated = currentSession.messages.toMutableList().apply { removeAt(index) }
+        updateCurrentMessages(updated)
     }
 
     fun stopGeneration() {
@@ -550,7 +557,8 @@ private fun EduAiLocalApp() {
                         { input = it }, { attachedFileName = null; attachedFileText = null },
                         currentSession.messages, generating, loadingModel, status,
                         { loadModel(it) }, { chatFilePicker.launch(arrayOf("text/plain", "text/markdown", "text/csv", "application/json", "text/*")) },
-                        { sendMessage() }, { stopGeneration() }, { copyText(context, it) }
+                        { sendMessage() }, { stopGeneration() }, { copyText(context, it) },
+                        { index -> deleteMessageIndex = index }
                     )
                     "models" -> ModelsScreen(
                         Modifier.padding(padding), installedModels, selectedFile, downloadName, downloadProgress,
@@ -583,6 +591,26 @@ private fun EduAiLocalApp() {
                     },
                     { renameDialog = false }
                 )
+            }
+
+            deleteMessageIndex?.let { index ->
+                val message = currentSession.messages.getOrNull(index)
+                if (message != null) {
+                    AlertDialog(
+                        onDismissRequest = { deleteMessageIndex = null },
+                        title = { Text(if (message.role == "user") "Delete your message?" else "Delete AI response?") },
+                        text = { Text("This message will be permanently removed from this chat.") },
+                        confirmButton = {
+                            TextButton({
+                                deleteCurrentMessage(index)
+                                deleteMessageIndex = null
+                            }) { Text("Delete") }
+                        },
+                        dismissButton = { TextButton({ deleteMessageIndex = null }) { Text("Cancel") } }
+                    )
+                } else {
+                    deleteMessageIndex = null
+                }
             }
 
             deleteChatId?.let { id ->
@@ -822,7 +850,8 @@ private fun ChatScreen(
     onPickFile: () -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
-    onCopy: (String) -> Unit
+    onCopy: (String) -> Unit,
+    onDeleteMessage: (Int) -> Unit
 ) {
     val listState = rememberLazyListState()
     val scrollScope = rememberCoroutineScope()
@@ -898,13 +927,23 @@ private fun ChatScreen(
                                 )
                                 if (message.text.isNotBlank() && !(generating && index == messages.lastIndex)) {
                                     Spacer(Modifier.height(5.dp))
-                                    TextButton(
-                                        onClick = { onCopy(message.text) },
-                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-                                    ) {
-                                        Icon(Icons.Default.ContentCopy, null, Modifier.size(15.dp))
-                                        Spacer(Modifier.width(4.dp))
-                                        Text("Copy", fontSize = 12.sp)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        TextButton(
+                                            onClick = { onCopy(message.text) },
+                                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                                        ) {
+                                            Icon(Icons.Default.ContentCopy, null, Modifier.size(15.dp))
+                                            Spacer(Modifier.width(4.dp))
+                                            Text("Copy", fontSize = 12.sp)
+                                        }
+                                        TextButton(
+                                            onClick = { onDeleteMessage(index) },
+                                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                                        ) {
+                                            Icon(Icons.Default.DeleteOutline, null, Modifier.size(15.dp))
+                                            Spacer(Modifier.width(4.dp))
+                                            Text("Delete", fontSize = 12.sp)
+                                        }
                                     }
                                 }
                             }
@@ -915,7 +954,12 @@ private fun ChatScreen(
 
             if (listState.canScrollForward) {
                 SmallFloatingActionButton(
-                    onClick = { scrollScope.launch { listState.animateScrollToItem(messages.lastIndex) } },
+                    onClick = {
+    scrollScope.launch {
+        listState.animateScrollToItem(messages.lastIndex)
+        if (messages.isNotEmpty()) listState.scrollToItem(messages.lastIndex, Int.MAX_VALUE)
+    }
+},
                     modifier = Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 12.dp),
                     containerColor = MaterialTheme.colorScheme.surface,
                     contentColor = MaterialTheme.colorScheme.primary
@@ -993,7 +1037,11 @@ private fun ChatHistoryScreen(
             Spacer(Modifier.height(10.dp))
         }
         items(sessions) { session ->
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                onClick = { onOpen(session.id) }
+            ) {
                 Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.ChatBubbleOutline, null, Modifier.size(28.dp))
                     Spacer(Modifier.width(12.dp))
@@ -1005,7 +1053,6 @@ private fun ChatHistoryScreen(
                             maxLines = 1, overflow = TextOverflow.Ellipsis
                         )
                     }
-                    IconButton({ onOpen(session.id) }) { Icon(if (session.id == currentId) Icons.Default.CheckCircle else Icons.Default.OpenInNew, "Open") }
                     IconButton({
                         onRename(session.id, session.title)
                     }) { Icon(Icons.Default.Edit, "Rename") }

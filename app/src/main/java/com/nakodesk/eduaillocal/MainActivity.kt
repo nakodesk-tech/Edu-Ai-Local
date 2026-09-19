@@ -1226,11 +1226,11 @@ private fun ModelsScreen(
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "RAM §{String.format("%.1f", device.totalRamGb)} GB • Available §{String.format("%.1f", device.availableRamGb)} GB • CPU §{device.cpuCores} cores",
+                    "RAM ${String.format("%.1f", device.totalRamGb)} GB • Available ${String.format("%.1f", device.availableRamGb)} GB • CPU ${device.cpuCores} cores",
                     fontSize = 13.sp
                 )
                 Text(
-                    "ABI: §{device.abi}" + if (device.lowMemory) " • Low-memory state detected" else "",
+                    "ABI: ${device.abi}" + if (device.lowMemory) " • Low-memory state detected" else "",
                     fontSize = 12.sp,
                     color = if (device.lowMemory) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1260,10 +1260,10 @@ private fun ModelsScreen(
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Column(Modifier.padding(14.dp)) {
-                    Text("Downloading §{downloadName}", fontWeight = FontWeight.SemiBold)
+                    Text("Downloading ${downloadName}", fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(8.dp))
                     LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
-                    Text("§{(progress * 100).toInt()}%", fontSize = 12.sp)
+                    Text("${(progress * 100).toInt()}%", fontSize = 12.sp)
                 }
             }
         }
@@ -1352,13 +1352,13 @@ private fun ModelsScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(model.name, fontWeight = FontWeight.Bold)
-                    Text("Size: §{model.size} • §{model.quantization}")
-                    Text("Type: §{model.type} • Use: §{model.use}")
+                    Text("Size: ${model.size} • ${model.quantization}")
+                    Text("Type: ${model.type} • Use: ${model.use}")
                     Text(
-                        "Device RAM: §{String.format("%.1f", device.totalRamGb)} GB total, §{String.format("%.1f", device.availableRamGb)} GB currently available."
+                        "Device RAM: ${String.format("%.1f", device.totalRamGb)} GB total, ${String.format("%.1f", device.availableRamGb)} GB currently available."
                     )
                     Text(
-                        "This model is rated §{risk} risk on the current device. Large local models can make the phone slow, warm, run out of memory, or cause Android to terminate the app when memory pressure becomes high."
+                        "This model is rated ${risk} risk on the current device. Large local models can make the phone slow, warm, run out of memory, or cause Android to terminate the app when memory pressure becomes high."
                     )
                     Text(
                         "Download only if you accept the performance impact. You can cancel safely now.",
@@ -1435,7 +1435,7 @@ private fun ModelCatalogCard(
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(model.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Text("§{model.quantization} • §{model.size}", fontSize = 12.sp)
+                    Text("${model.quantization} • ${model.size}", fontSize = 12.sp)
                 }
                 if (risk != "Low" && !installed) {
                     AssistChip(
@@ -1448,7 +1448,7 @@ private fun ModelCatalogCard(
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AssistChip(onClick = {}, label = { Text(model.type) })
-                AssistChip(onClick = {}, label = { Text("RAM ≥ §{model.minRamGb.toInt()} GB") })
+                AssistChip(onClick = {}, label = { Text("RAM ≥ ${model.minRamGb.toInt()} GB") })
             }
             Spacer(Modifier.height(8.dp))
             Text(model.use, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)

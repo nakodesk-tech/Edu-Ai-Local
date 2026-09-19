@@ -10,6 +10,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -309,7 +310,7 @@ private fun EduAiLocalApp() {
                 ModalDrawerSheet(Modifier.width(300.dp)) {
                     Spacer(Modifier.height(28.dp))
                     Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Psychology, null, tint = Color(0xFF1689D7), Modifier.size(34.dp))
+                        Icon(Icons.Default.Psychology, null, tint = Color(0xFF1689D7), modifier = Modifier.size(34.dp))
                         Spacer(Modifier.width(10.dp))
                         Text("Edu AI Local", fontSize = 21.sp, fontWeight = FontWeight.Bold)
                     }
@@ -327,9 +328,9 @@ private fun EduAiLocalApp() {
                     DrawerItem("About", Icons.Default.Info, false) { drawerOpen = false }
                     Spacer(Modifier.weight(1f))
                     Surface(
-                        Modifier.padding(16.dp).fillMaxWidth(),
-                        RoundedCornerShape(16.dp),
-                        if (darkTheme) Color(0xFF162A20) else Color(0xFFE9F8EF)
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (darkTheme) Color(0xFF162A20) else Color(0xFFE9F8EF)
                     ) {
                         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(10.dp).background(Color(0xFF2FC66D), RoundedCornerShape(50)))
@@ -396,7 +397,7 @@ private fun ChatScreen(
 ) {
     Column(modifier.fillMaxSize()) {
         if (installed.isEmpty()) {
-            Card(Modifier.fillMaxWidth().padding(16.dp), RoundedCornerShape(18.dp)) {
+            Card(modifier = Modifier.fillMaxWidth().padding(16.dp), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(18.dp)) {
                     Text("No local model installed", fontWeight = FontWeight.Bold, fontSize = 17.sp)
                     Spacer(Modifier.height(5.dp))
@@ -408,8 +409,8 @@ private fun ChatScreen(
             Box {
                 OutlinedButton(
                     onClick = { expanded = true },
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-                    RoundedCornerShape(16.dp)
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(9.dp).background(if (selectedFile != null) Color(0xFF2FC66D) else Color.Gray, RoundedCornerShape(50)))
@@ -443,12 +444,12 @@ private fun ChatScreen(
                     Surface(
                         shape = RoundedCornerShape(18.dp),
                         color = if (user) Color(0xFF1976F3) else MaterialTheme.colorScheme.surfaceVariant,
-                        Modifier.widthIn(max = 340.dp)
+                        modifier = Modifier.widthIn(max = 340.dp)
                     ) {
                         Text(
                             message.text.ifBlank { if (generating && !user) "…" else "" },
                             color = if (user) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                            Modifier.padding(14.dp), lineHeight = 21.sp
+                            modifier = Modifier.padding(14.dp), lineHeight = 21.sp
                         )
                     }
                 }
@@ -497,11 +498,11 @@ private fun ModelsScreen(
         }
 
         if (downloadName != null) {
-            Card(Modifier.fillMaxWidth().padding(16.dp), RoundedCornerShape(16.dp)) {
+            Card(modifier = Modifier.fillMaxWidth().padding(16.dp), shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.padding(14.dp)) {
                     Text("Downloading " + downloadName, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(8.dp))
-                    LinearProgressIndicator(progress = { progress }, Modifier.fillMaxWidth())
+                    LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
                     Text((progress * 100).toInt().toString() + "%", fontSize = 12.sp)
                 }
             }
@@ -529,10 +530,10 @@ private fun ModelsScreen(
 
 @Composable
 private fun InstalledModelCard(file: File, onLoad: () -> Unit, onDelete: () -> Unit) {
-    Card(Modifier.fillMaxWidth(), RoundedCornerShape(18.dp)) {
+    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Psychology, null, tint = Color(0xFF1689D7), Modifier.size(42.dp))
+                Icon(Icons.Default.Psychology, null, tint = Color(0xFF1689D7), modifier = Modifier.size(42.dp))
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(file.name, fontWeight = FontWeight.Bold)
@@ -550,10 +551,10 @@ private fun InstalledModelCard(file: File, onLoad: () -> Unit, onDelete: () -> U
 
 @Composable
 private fun ModelCatalogCard(model: CatalogModel, installed: Boolean, onDownload: () -> Unit) {
-    Card(Modifier.fillMaxWidth(), RoundedCornerShape(18.dp)) {
+    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Psychology, null, tint = Color(0xFF1689D7), Modifier.size(42.dp))
+                Icon(Icons.Default.Psychology, null, tint = Color(0xFF1689D7), modifier = Modifier.size(42.dp))
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(model.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
@@ -563,7 +564,7 @@ private fun ModelCatalogCard(model: CatalogModel, installed: Boolean, onDownload
             Spacer(Modifier.height(7.dp))
             Text(model.description, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
-            Button(onClick = onDownload, enabled = !installed, Modifier.fillMaxWidth()) {
+            Button(onClick = onDownload, enabled = !installed, modifier = Modifier.fillMaxWidth()) {
                 Icon(if (installed) Icons.Default.Check else Icons.Default.Download, null)
                 Spacer(Modifier.width(6.dp))
                 Text(if (installed) "Downloaded" else "Download")

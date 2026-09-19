@@ -1,0 +1,8 @@
+{
+  "name": "Edu AI Local",
+  "description": "Native offline AI chat for Android with local GGUF models",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

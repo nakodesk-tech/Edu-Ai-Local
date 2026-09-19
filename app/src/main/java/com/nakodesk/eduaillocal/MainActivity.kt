@@ -195,38 +195,6 @@ private fun EduAiLocalApp() {
             ?.sortedBy { it.name.lowercase() } ?: emptyList()
     }
 
-    LaunchedEffect(Unit) {
-        refreshModels()
-        try {
-            engine = withContext(Dispatchers.Default) {
-                AiChat.getInferenceEngine(context.applicationContext)
-            }
-
-            val savedModelName = context.getSharedPreferences(MODEL_PREFS, Context.MODE_PRIVATE)
-                .getString(MODEL_FILE, null)
-
-            val savedModel = savedModelName?.let { name ->
-                File(File(context.filesDir, MODEL_DIR), name).takeIf { it.isFile }
-            }
-
-            if (savedModel != null) {
-                status = "Restoring " + savedModel.name + "…"
-                loadModel(savedModel)
-            } else {
-                if (savedModelName != null) {
-                    context.getSharedPreferences(MODEL_PREFS, Context.MODE_PRIVATE)
-                        .edit()
-                        .remove(MODEL_FILE)
-                        .apply()
-                }
-                status = "Ready — choose a local model"
-            }
-        } catch (e: Exception) {
-            status = "Inference engine unavailable"
-            errorMessage = e.message ?: "Could not initialize local inference."
-        }
-    }
-
     fun loadModel(file: File) {
         val localEngine = engine ?: run {
             errorMessage = "Local inference engine is not ready yet."
@@ -268,6 +236,38 @@ private fun EduAiLocalApp() {
             } finally {
                 loadingModel = false
             }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        refreshModels()
+        try {
+            engine = withContext(Dispatchers.Default) {
+                AiChat.getInferenceEngine(context.applicationContext)
+            }
+
+            val savedModelName = context.getSharedPreferences(MODEL_PREFS, Context.MODE_PRIVATE)
+                .getString(MODEL_FILE, null)
+
+            val savedModel = savedModelName?.let { name ->
+                File(File(context.filesDir, MODEL_DIR), name).takeIf { it.isFile }
+            }
+
+            if (savedModel != null) {
+                status = "Restoring " + savedModel.name + "…"
+                loadModel(savedModel)
+            } else {
+                if (savedModelName != null) {
+                    context.getSharedPreferences(MODEL_PREFS, Context.MODE_PRIVATE)
+                        .edit()
+                        .remove(MODEL_FILE)
+                        .apply()
+                }
+                status = "Ready — choose a local model"
+            }
+        } catch (e: Exception) {
+            status = "Inference engine unavailable"
+            errorMessage = e.message ?: "Could not initialize local inference."
         }
     }
 
@@ -755,14 +755,14 @@ private fun HomeScreen(
         }
 
         item {
-            Row(CenterArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 HomeActionCard("New Chat", "नवीन संभाषण", Icons.Default.AddComment, Modifier.weight(1f), onStart)
                 HomeActionCard("Chats", "Chat History", Icons.Default.History, Modifier.weight(1f), onHistory)
             }
         }
 
         item {
-            Row(CenterArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 HomeActionCard("Models", selectedFile?.name ?: "Model निवडा", Icons.Default.Memory, Modifier.weight(1f), onModels)
                 HomeActionCard("Settings", "App preferences", Icons.Default.Settings, Modifier.weight(1f), onSettings)
             }

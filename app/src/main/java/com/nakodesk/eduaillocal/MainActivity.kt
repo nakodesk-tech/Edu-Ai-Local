@@ -2,10 +2,12 @@ package com.nakodesk.eduaillocal
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.app.ActivityManager
 import android.content.Context
 import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -61,20 +63,108 @@ private data class CatalogModel(
     val quantization: String,
     val size: String,
     val description: String,
-    val url: String
+    val url: String,
+    val type: String = "Text",
+    val use: String = "General chat",
+    val minRamGb: Double = 4.0,
+    val tier: String = "recommended"
 )
 
 private val catalog = listOf(
-    CatalogModel("Llama 3.2 3B Instruct", "llama-3.2-3b-instruct-q4_k_m.gguf", "Q4_K_M", "2.02 GB",
-        "Better quality • General purpose instruct model",
-        "https://huggingface.co/hugging-quants/Llama-3.2-3B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-3b-instruct-q4_k_m.gguf?download=true"),
-    CatalogModel("Gemma 3 1B Instruct", "gemma-3-1b-it-Q4_K_M.gguf", "Q4_K_M", "806 MB",
-        "Fast / Basic • Small and lightweight model",
-        "https://huggingface.co/ggml-org/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf?download=true"),
-    CatalogModel("Qwen 3 4B", "Qwen3-4B-Q4_K_M.gguf", "Q4_K_M", "2.50 GB",
-        "Advanced / Multilingual • General-purpose model",
-        "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf?download=true")
+    CatalogModel(
+        "Gemma 3 1B Instruct",
+        "gemma-3-1b-it-Q4_K_M.gguf",
+        "Q4_K_M",
+        "806 MB",
+        "Fast and lightweight Marathi-first everyday assistant.",
+        "https://huggingface.co/ggml-org/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf?download=true",
+        "Text",
+        "Everyday chat, Marathi, short answers",
+        4.0,
+        "recommended"
+    ),
+    CatalogModel(
+        "Llama 3.2 3B Instruct",
+        "llama-3.2-3b-instruct-q4_k_m.gguf",
+        "Q4_K_M",
+        "2.02 GB",
+        "Higher-quality general instruction and conversation model.",
+        "https://huggingface.co/hugging-quants/Llama-3.2-3B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-3b-instruct-q4_k_m.gguf?download=true",
+        "Text",
+        "Chat, summarization, general tasks",
+        6.0,
+        "recommended"
+    ),
+    CatalogModel(
+        "Qwen 3 4B",
+        "Qwen3-4B-Q4_K_M.gguf",
+        "Q4_K_M",
+        "2.50 GB",
+        "Stronger multilingual and reasoning-oriented local assistant.",
+        "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf?download=true",
+        "Text",
+        "Reasoning, multilingual, longer tasks",
+        8.0,
+        "recommended"
+    ),
+    CatalogModel(
+        "Gemma 3 4B Instruct",
+        "gemma-3-4b-it-Q4_K_M.gguf",
+        "Q4_K_M",
+        "2.49 GB",
+        "Heavy model with stronger quality; Gemma 3 also has a vision-capable variant.",
+        "https://huggingface.co/ggml-org/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf?download=true",
+        "Text",
+        "Higher-quality chat, documents, reasoning",
+        10.0,
+        "heavy"
+    ),
+    CatalogModel(
+        "Llama 3.1 8B Instruct",
+        "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
+        "Q4_K_M",
+        "4.92 GB",
+        "Large instruction model for demanding reasoning and writing tasks.",
+        "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf?download=true",
+        "Text",
+        "Advanced writing, reasoning, complex tasks",
+        12.0,
+        "heavy"
+    )
 )
+
+private data class DeviceProfile(
+    val totalRamGb: Double,
+    val availableRamGb: Double,
+    val cpuCores: Int,
+    val abi: String,
+    val lowMemory: Boolean
+)
+
+private fun readDeviceProfile(context: Context): DeviceProfile {
+    val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+    val memory = ActivityManager.MemoryInfo().also { manager.getMemoryInfo(it) }
+    val total = memory.totalMem / (1024.0 * 1024.0 * 1024.0)
+    val available = memory.availMem / (1024.0 * 1024.0 * 1024.0)
+    val abi = Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown"
+    return DeviceProfile(total, available, Runtime.getRuntime().availableProcessors(), abi, memory.lowMemory)
+}
+
+private fun isModelRecommended(model: CatalogModel, device: DeviceProfile): Boolean {
+    if (device.lowMemory) return false
+    if (device.totalRamGb + 0.25 < model.minRamGb) return false
+    return device.availableRamGb >= minOf(model.minRamGb * 0.55, 4.0) || model.minRamGb <= 4.0
+}
+
+private fun modelRisk(model: CatalogModel, device: DeviceProfile): String {
+    return when {
+        device.lowMemory -> "High"
+        device.totalRamGb + 0.25 < model.minRamGb -> "High"
+        device.availableRamGb < minOf(model.minRamGb * 0.55, 4.0) -> "Medium"
+        model.tier == "heavy" -> "Medium"
+        else -> "Low"
+    }
+}
 
 private data class ChatMessage(val role: String, val text: String)
 private data class ChatSession(
@@ -1096,11 +1186,25 @@ private fun ModelsScreen(
     onDelete: (File) -> Unit
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var warningModel by remember { mutableStateOf<CatalogModel?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val device = remember { readDeviceProfile(context) }
+
+    val recommended = catalog.filter { it.tier == "recommended" && isModelRecommended(it, device) }
+    val heavy = catalog.filter { it.tier == "heavy" }
+
     Column(modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Column(Modifier.weight(1f)) {
                 Text("Models", fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                Text("Install, load and manage GGUF models", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "Device-aware local model selection",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             Button(onClick = onImport, shape = RoundedCornerShape(14.dp)) {
                 Icon(Icons.Default.Add, null)
@@ -1108,34 +1212,173 @@ private fun ModelsScreen(
                 Text("Import")
             }
         }
-        TabRow(selectedTabIndex = tab) {
-            listOf("Installed", "Available", "Downloads").forEachIndexed { index, label ->
-                Tab(tab == index, { tab = index }, text = { Text(label) })
+
+        Card(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        ) {
+            Column(Modifier.padding(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.PhoneAndroid, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Device configuration", fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "RAM §{String.format("%.1f", device.totalRamGb)} GB • Available §{String.format("%.1f", device.availableRamGb)} GB • CPU §{device.cpuCores} cores",
+                    fontSize = 13.sp
+                )
+                Text(
+                    "ABI: §{device.abi}" + if (device.lowMemory) " • Low-memory state detected" else "",
+                    fontSize = 12.sp,
+                    color = if (device.lowMemory) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
+
+        Spacer(Modifier.height(8.dp))
+
+        TabRow(selectedTabIndex = tab) {
+            Tab(
+                selected = tab == 0,
+                onClick = { tab = 0 },
+                text = { Text("Recommended") },
+                icon = { Icon(Icons.Default.Star, null) }
+            )
+            Tab(
+                selected = tab == 1,
+                onClick = { tab = 1 },
+                text = { Text("Available") },
+                icon = { Icon(Icons.Default.Storage, null) }
+            )
+        }
+
         if (downloadName != null) {
-            Card(modifier = Modifier.fillMaxWidth().padding(16.dp), shape = RoundedCornerShape(16.dp)) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
                 Column(Modifier.padding(14.dp)) {
-                    Text("Downloading " + downloadName, fontWeight = FontWeight.SemiBold)
+                    Text("Downloading §{downloadName}", fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(8.dp))
                     LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
-                    Text((progress * 100).toInt().toString() + "%", fontSize = 12.sp)
+                    Text("§{(progress * 100).toInt()}%", fontSize = 12.sp)
                 }
             }
         }
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            when (tab) {
-                0 -> if (installed.isEmpty()) item { EmptyModelsCard() }
-                else items(installed) { file -> InstalledModelCard(file, selectedFile?.path == file.path, { onLoad(file) }, { onDelete(file) }) }
-                1 -> items(catalog) { model ->
+
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (tab == 0) {
+                item {
+                    Text("Recommended for this device", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "The list changes automatically according to RAM and current memory pressure.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                if (recommended.isEmpty()) {
+                    item {
+                        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+                            Column(Modifier.padding(16.dp)) {
+                                Icon(Icons.Default.Memory, null, Modifier.size(34.dp))
+                                Spacer(Modifier.height(8.dp))
+                                Text("No model is currently recommended", fontWeight = FontWeight.Bold)
+                                Text(
+                                    "Close other apps or free some RAM, then return here. You can still view heavier models in Available.",
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    items(recommended) { model ->
+                        val exists = installed.any { it.name == model.fileName }
+                        ModelCatalogCard(model, exists, modelRisk(model, device)) {
+                            if (!exists) {
+                                if (modelRisk(model, device) != "Low") warningModel = model
+                                else onDownload(model)
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Text("Installed on this device", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+                if (installed.isEmpty()) {
+                    item { EmptyModelsCard() }
+                } else {
+                    items(installed) { file ->
+                        InstalledModelCard(
+                            file,
+                            selectedFile?.path == file.path,
+                            { onLoad(file) },
+                            { onDelete(file) }
+                        )
+                    }
+                }
+            } else {
+                item {
+                    Text("Available heavy models", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "These models are intentionally shown even when your device is not a good fit. Check the warning before downloading.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                items(heavy) { model ->
                     val exists = installed.any { it.name == model.fileName }
-                    ModelCatalogCard(model, exists) { if (!exists) onDownload(model) }
-                }
-                2 -> item {
-                    if (downloadName == null) Text("No active downloads.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    ModelCatalogCard(model, exists, modelRisk(model, device)) {
+                        if (!exists) warningModel = model
+                    }
                 }
             }
         }
+    }
+
+    warningModel?.let { model ->
+        val risk = modelRisk(model, device)
+        AlertDialog(
+            onDismissRequest = { warningModel = null },
+            icon = { Icon(Icons.Default.WarningAmber, null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("Performance warning") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(model.name, fontWeight = FontWeight.Bold)
+                    Text("Size: §{model.size} • §{model.quantization}")
+                    Text("Type: §{model.type} • Use: §{model.use}")
+                    Text(
+                        "Device RAM: §{String.format("%.1f", device.totalRamGb)} GB total, §{String.format("%.1f", device.availableRamGb)} GB currently available."
+                    )
+                    Text(
+                        "This model is rated §{risk} risk on the current device. Large local models can make the phone slow, warm, run out of memory, or cause Android to terminate the app when memory pressure becomes high."
+                    )
+                    Text(
+                        "Download only if you accept the performance impact. You can cancel safely now.",
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val selected = warningModel
+                        warningModel = null
+                        if (selected != null) onDownload(selected)
+                    }
+                ) { Text("Download anyway") }
+            },
+            dismissButton = {
+                TextButton(onClick = { warningModel = null }) { Text("Cancel") }
+            }
+        )
     }
 }
 
@@ -1174,21 +1417,52 @@ private fun InstalledModelCard(file: File, loaded: Boolean, onLoad: () -> Unit, 
 }
 
 @Composable
-private fun ModelCatalogCard(model: CatalogModel, installed: Boolean, onDownload: () -> Unit) {
+private fun ModelCatalogCard(
+    model: CatalogModel,
+    installed: Boolean,
+    risk: String = "Low",
+    onDownload: () -> Unit
+) {
     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Psychology, null, modifier = Modifier.size(42.dp), tint = Color(0xFF1689D7))
+                Icon(
+                    if (model.type.contains("Vision", true)) Icons.Default.Image else Icons.Default.Psychology,
+                    null,
+                    modifier = Modifier.size(42.dp),
+                    tint = Color(0xFF1689D7)
+                )
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(model.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Text(model.quantization + " • " + model.size, fontSize = 12.sp)
+                    Text("§{model.quantization} • §{model.size}", fontSize = 12.sp)
+                }
+                if (risk != "Low" && !installed) {
+                    AssistChip(
+                        onClick = {},
+                        label = { Text(risk) },
+                        leadingIcon = { Icon(Icons.Default.WarningAmber, null, Modifier.size(16.dp)) }
+                    )
                 }
             }
-            Spacer(Modifier.height(7.dp))
-            Text(model.description, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AssistChip(onClick = {}, label = { Text(model.type) })
+                AssistChip(onClick = {}, label = { Text("RAM ≥ §{model.minRamGb.toInt()} GB") })
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(model.use, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            Text(
+                model.description,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(Modifier.height(12.dp))
-            Button(onClick = onDownload, enabled = !installed, modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = onDownload,
+                enabled = !installed,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Icon(if (installed) Icons.Default.Check else Icons.Default.Download, null)
                 Spacer(Modifier.width(6.dp))
                 Text(if (installed) "Downloaded" else "Download")

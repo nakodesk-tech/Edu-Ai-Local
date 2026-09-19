@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
@@ -275,7 +276,24 @@ private fun EduAiLocalApp() {
         }
     }
 
+    val modelPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { importModel(it) }
+    }
+
     val drawerState = rememberDrawerState(DrawerValue.Closed)
+
+    // Predictable Android back navigation:
+    // 1) close the drawer first
+    // 2) from any secondary screen return to Chat
+    // 3) only the root Chat screen is allowed to exit the activity
+    BackHandler(enabled = drawerOpen || screen != "chat") {
+        if (drawerOpen) {
+            drawerOpen = false
+        } else {
+            screen = "chat"
+        }
+    }
+
     LaunchedEffect(drawerOpen) {
         if (drawerOpen) drawerState.open() else drawerState.close()
     }
@@ -302,7 +320,7 @@ private fun EduAiLocalApp() {
                     }
                     DrawerItem("Chats", Icons.Default.Chat, false) { screen = "chat"; drawerOpen = false }
                     DrawerItem("Models", Icons.Default.Memory, screen == "models") { screen = "models"; drawerOpen = false }
-                    DrawerItem("Import Model", Icons.Default.FolderOpen, false) { screen = "models"; drawerOpen = false }
+                    DrawerItem("Import Model", Icons.Default.FolderOpen, false) {\n                        drawerOpen = false\n                        modelPicker.launch(arrayOf("application/octet-stream", "application/x-gguf", "*/*"))\n                    }
                     HorizontalDivider(Modifier.padding(vertical = 14.dp))
                     DrawerItem("Settings", Icons.Default.Settings, screen == "settings") { screen = "settings"; drawerOpen = false }
                     DrawerItem("Appearance", Icons.Default.DarkMode, false) { darkTheme = !darkTheme }
@@ -455,7 +473,7 @@ private fun ChatScreen(
 @Composable
 private fun ModelsScreen(
     modifier: Modifier, installed: List<File>, downloadName: String?, progress: Float,
-    onImport: (Uri) -> Unit, onDownload: (CatalogModel) -> Unit,
+    onImport: () -> Unit, onDownload: (CatalogModel) -> Unit,
     onLoad: (File) -> Unit, onDelete: (File) -> Unit
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
@@ -465,7 +483,7 @@ private fun ModelsScreen(
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Models", fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             Button(
-                onClick = { picker.launch(arrayOf("application/octet-stream", "application/x-gguf", "*/*")) },
+                onClick = onImport,
                 shape = RoundedCornerShape(14.dp)
             ) {
                 Icon(Icons.Default.Add, null); Spacer(Modifier.width(4.dp)); Text("Import")

@@ -321,7 +321,10 @@ private fun EduAiLocalApp() {
                     }
                     DrawerItem("Chats", Icons.Default.Chat, false) { screen = "chat"; drawerOpen = false }
                     DrawerItem("Models", Icons.Default.Memory, screen == "models") { screen = "models"; drawerOpen = false }
-                    DrawerItem("Import Model", Icons.Default.FolderOpen, false) {\n                        drawerOpen = false\n                        modelPicker.launch(arrayOf("application/octet-stream", "application/x-gguf", "*/*"))\n                    }
+                    DrawerItem("Import Model", Icons.Default.FolderOpen, false) {
+                        drawerOpen = false
+                        modelPicker.launch(arrayOf("application/octet-stream", "application/x-gguf", "*/*"))
+                    }
                     HorizontalDivider(Modifier.padding(vertical = 14.dp))
                     DrawerItem("Settings", Icons.Default.Settings, screen == "settings") { screen = "settings"; drawerOpen = false }
                     DrawerItem("Appearance", Icons.Default.DarkMode, false) { darkTheme = !darkTheme }
@@ -362,7 +365,8 @@ private fun EduAiLocalApp() {
                     )
                     "models" -> ModelsScreen(
                         Modifier.padding(padding), installedModels, downloadName, downloadProgress,
-                        { importModel(it) }, { downloadModel(it) }, { loadModel(it) },
+                        { modelPicker.launch(arrayOf("application/octet-stream", "application/x-gguf", "*/*")) },
+                        { downloadModel(it) }, { loadModel(it) },
                         { file -> file.delete(); refreshModels(); if (selectedFile?.path == file.path) selectedFile = null }
                     )
                     else -> SettingsScreen(Modifier.padding(padding), darkTheme, { darkTheme = it }, selectedFile)
@@ -478,7 +482,6 @@ private fun ModelsScreen(
     onLoad: (File) -> Unit, onDelete: (File) -> Unit
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(onImport) }
 
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {

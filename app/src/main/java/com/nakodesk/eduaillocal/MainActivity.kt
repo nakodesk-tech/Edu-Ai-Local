@@ -126,8 +126,9 @@ private fun EduAiLocalApp() {
     }
 
     fun updateCurrentMessages(newMessages: List<ChatMessage>) {
+        val targetId = currentChatId ?: return
         sessions = sessions.map {
-            if (it.id == currentSession.id) {
+            if (it.id == targetId) {
                 val title = if (it.title == "New Chat") {
                     newMessages.firstOrNull { m -> m.role == "user" }?.text
                         ?.replace(Regex("\\s+"), " ")

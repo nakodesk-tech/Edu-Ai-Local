@@ -2,63 +2,51 @@
 
 > **Private, native, offline AI chat for Android.**
 
-Edu AI Local is a native Android application focused on running compatible AI models **locally on the device**. It combines a familiar chat experience with a model-first design, so users can choose, download, or import the local model they want to use.
+Edu AI Local is a native Android app for running compatible GGUF language models directly on the phone. It combines a familiar chat experience with a model manager for downloading, importing, loading and removing local models.
 
-## ✨ Highlights
+## ✨ Current Features
 
-- 💬 Familiar ChatGPT-style chat experience
-- 📦 Local model library and model selection
+- 💬 Native ChatGPT-style chat UI
+- 🧠 On-device inference through llama.cpp
+- 📦 Local GGUF model library
 - ⬇️ Download supported models
-- 📁 Import already-downloaded **GGUF** models
-- 🔄 Load and unload models when needed
-- 🔒 Private, on-device AI inference
-- 🌙 Light and dark themes
-- 💾 Local conversation history
-- 📱 Native Android experience
+- 📁 Import GGUF models from Android storage
+- 🔄 Load and unload local models
+- 📊 Download progress
+- 🌙 Light / dark theme
+- 🔒 Offline-first chat
 
-## 🧠 Model-first
+### Supported download catalog
 
-Edu AI Local is **not tied to a single model**.
+- **Llama 3.2 3B Instruct — Q4_K_M** (~2.02 GB)
+- **Gemma 3 1B Instruct — Q4_K_M** (~806 MB)
+- **Qwen 3 4B — Q4_K_M** (~2.50 GB)
 
-The architecture is intended to support compatible local models such as:
-
-- Llama
-- Gemma
-- Qwen
-- Phi
-- Mistral
-- Other supported GGUF models
-
-Model compatibility and device performance will be verified before models are added to the supported catalog.
+Users can also import other compatible GGUF files from device storage.
 
 ## 🏗️ Technology
 
 - **Platform:** Native Android
 - **Language:** Kotlin
-- **UI:** Modern Android UI
-- **Local inference:** llama.cpp
+- **UI:** Jetpack Compose + Material 3
+- **Inference:** llama.cpp / Arm AI Chat Android binding
 - **Model format:** GGUF
-- **Storage:** Android local/app-private storage
+- **Storage:** App-private local model storage
+- **Minimum Android:** 13 (API 33)
+
+The app uses the Android llama.cpp binding for local GGUF model loading and token generation.
 
 ## 🔐 Privacy
 
-The core chat experience is designed for **on-device inference**. Once a compatible model is available locally, chat can continue without an internet connection or cloud AI API.
+The chat inference path is designed to keep prompts and generated responses on the device. Internet access is used only for explicitly online operations such as downloading a model.
 
-Internet access is only needed for features such as downloading models or other explicitly online functionality.
+Once a model is installed, it can be loaded and used without an internet connection.
 
-## 🚧 Project Status
+## 🚧 Status
 
-**Early development**
+**Early functional build**
 
-Current development focus:
-
-1. Native Android foundation
-2. Chat interface
-3. Model Manager
-4. GGUF import
-5. Local model loading
-6. Offline inference
-7. Model download/catalog experience
+The current codebase contains the native UI, model manager, GGUF import flow, model downloads and local inference integration. Further work will refine the UI, model metadata, chat persistence, performance controls and device-specific tuning.
 
 ## 🎯 Goal
 

@@ -217,7 +217,7 @@ private fun EduAiLocalApp() {
                 status = "Model load failed"
                 val nativeState = try { localEngine.state.value.toString() } catch (_: Exception) { "unknown" }
                 val detail = e.message?.takeIf { it.isNotBlank() } ?: e::class.java.simpleName
-                errorMessage = "Cannot load model.\\n$detail\\nEngine state: $nativeState"
+                errorMessage = "Cannot load model.\n$detail\nEngine state: $nativeState"
             } finally {
                 loadingModel = false
             }

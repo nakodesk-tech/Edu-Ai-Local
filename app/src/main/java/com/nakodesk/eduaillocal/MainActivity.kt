@@ -53,6 +53,22 @@ private val catalog = listOf(
         size = "2.02 GB",
         description = "General purpose instruct model",
         url = "https://huggingface.co/hugging-quants/Llama-3.2-3B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-3b-instruct-q4_k_m.gguf?download=true"
+    ),
+    CatalogModel(
+        name = "Gemma 3 1B Instruct",
+        fileName = "gemma-3-1b-it-Q4_K_M.gguf",
+        quantization = "Q4_K_M",
+        size = "806 MB",
+        description = "Small and lightweight model",
+        url = "https://huggingface.co/unsloth/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf?download=true"
+    ),
+    CatalogModel(
+        name = "Qwen 3 4B",
+        fileName = "Qwen3-4B-Q4_K_M.gguf",
+        quantization = "Q4_K_M",
+        size = "2.50 GB",
+        description = "Multilingual general-purpose model",
+        url = "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf?download=true"
     )
 )
 
@@ -259,9 +275,18 @@ private fun EduAiLocalApp() {
         }
     }
 
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    LaunchedEffect(drawerOpen) {
+        if (drawerOpen) drawerState.open() else drawerState.close()
+    }
+
+    DisposableEffect(engine) {
+        onDispose { engine?.destroy() }
+    }
+
     MaterialTheme(colorScheme = if (darkTheme) darkColorScheme() else lightColorScheme()) {
         ModalNavigationDrawer(
-            drawerState = rememberDrawerState(if (drawerOpen) DrawerValue.Open else DrawerValue.Closed),
+            drawerState = drawerState,
             drawerContent = {
                 ModalDrawerSheet(Modifier.width(300.dp)) {
                     Spacer(Modifier.height(28.dp))
